@@ -1,0 +1,8 @@
+sounddevice
+soundfile
+librosa
+torch
+pyannote.audio
+joblib
+numpy
+scikit-learn
