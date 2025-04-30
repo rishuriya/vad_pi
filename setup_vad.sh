@@ -7,14 +7,14 @@ KNOWN_WIFI_PSK="wefp8772"
 
 # This is the URL of the *actual project repository* to be cloned
 GIT_REPO_URL="https://github.com/rishuriya/vad_pi.git"
-TARGET_CLONE_DIR="/home/pi/vad_project"
+TARGET_CLONE_DIR="/home/rishav_a2z/vad_project"
 
 # Paths *relative to the project repository root* after cloning
 PYTHON_SCRIPT_REL_PATH="rasperrypi/realtime_vad_inference.py" 
 REQUIREMENTS_FILE_REL_PATH="rasperrypi/requirements_inference.txt" 
 
 # Other paths
-VENV_PATH="/home/pi/venv_vad"                # Path for the Python virtual environment
+VENV_PATH="/home/rishav_a2z/venv_vad"                # Path for the Python virtual environment
 WIFI_HELPER_SCRIPT_PATH="/usr/local/bin/wifi_connect_helper.sh"
 SERVICE_DIR="/etc/systemd/system"
 WIFI_SERVICE_NAME="wifi-connect"
@@ -76,8 +76,8 @@ if [ -d "$TARGET_CLONE_DIR" ]; then
     echo "Removing existing project directory: $TARGET_CLONE_DIR"
     rm -rf "$TARGET_CLONE_DIR"
 fi
-# Clone as the 'pi' user
-sudo -u pi git clone "$GIT_REPO_URL" "$TARGET_CLONE_DIR" || { echo "🚨 Failed to clone repository."; exit 1; }
+# Clone as the target user
+sudo -u rishav_a2z git clone "$GIT_REPO_URL" "$TARGET_CLONE_DIR" || { echo "🚨 Failed to clone repository."; exit 1; }
 
 # Check if cloning was successful and target directory exists
 if [ ! -d "$TARGET_CLONE_DIR" ]; then
@@ -91,13 +91,15 @@ if [ -d "$VENV_PATH" ]; then
     echo "Removing existing virtual environment: $VENV_PATH"
     rm -rf "$VENV_PATH"
 fi
-sudo -u pi python3 -m venv "$VENV_PATH" || { echo "🚨 Failed to create virtual environment."; exit 1; }
+# Create venv as the target user
+sudo -u rishav_a2z python3 -m venv "$VENV_PATH" || { echo "🚨 Failed to create virtual environment."; exit 1; }
 
 REQUIREMENTS_ABS_PATH="$TARGET_CLONE_DIR/$REQUIREMENTS_FILE_REL_PATH"
 if [ ! -f "$REQUIREMENTS_ABS_PATH" ]; then echo "🚨 Requirements file not found: $REQUIREMENTS_ABS_PATH"; exit 1; fi
 
 echo "Installing Python requirements from $REQUIREMENTS_ABS_PATH..."
-sudo -u pi "$VENV_PATH/bin/pip" install -r "$REQUIREMENTS_ABS_PATH" || { echo "🚨 Failed to install requirements."; exit 1; }
+# Install requirements as the target user
+sudo -u rishav_a2z "$VENV_PATH/bin/pip" install -r "$REQUIREMENTS_ABS_PATH" || { echo "🚨 Failed to install requirements."; exit 1; }
 
 # --- << START Hugging Face Token Handling >> ---
 echo "" # Add some spacing
@@ -116,9 +118,9 @@ while [ -z "$HF_TOKEN_INPUT" ]; do
 done
 
 # --- Configure Environment Variable Persistence ---
-# Detect the shell and determine the profile file for the 'pi' user
-# Note: We are configuring for the 'pi' user as the service runs as 'pi'
-TARGET_USER="pi"
+# Detect the shell and determine the profile file for the target user
+# Note: We are configuring for the target user as the service runs as them
+TARGET_USER="rishav_a2z"
 USER_SHELL=$(getent passwd $TARGET_USER | cut -d: -f7 || echo "/bin/bash") # Default to bash if lookup fails
 PROFILE_FILE=""
 
@@ -217,7 +219,7 @@ echo "✅ wifi-connect service file created."
 # Define absolute paths based on the cloned repo location
 PYTHON_EXEC_PATH="$VENV_PATH/bin/python"
 PYTHON_SCRIPT_ABS_PATH="$TARGET_CLONE_DIR/$PYTHON_SCRIPT_REL_PATH"
-WORKING_DIR=$(dirname "$PYTHON_SCRIPT_ABS_PATH") # e.g., /home/pi/vad_project/rasperrypi
+WORKING_DIR=$(dirname "$PYTHON_SCRIPT_ABS_PATH") # e.g., /home/rishav_a2z/vad_project/rasperrypi
 
 # Verify paths needed for the service
 if [ ! -f "$PYTHON_EXEC_PATH" ]; then echo "🚨 Python executable not found: $PYTHON_EXEC_PATH"; exit 1; fi
@@ -233,8 +235,8 @@ Wants=network-online.target ${WIFI_SERVICE_NAME}.service
 After=network-online.target sound.target ${WIFI_SERVICE_NAME}.service
 
 [Service]
-User=pi
-Group=pi
+User=rishav_a2z
+Group=rishav_a2z
 WorkingDirectory=$WORKING_DIR
 # Pass the Hugging Face token as an environment variable to the service
 Environment="HUGGING_FACE_TOKEN=$HF_TOKEN_INPUT"
