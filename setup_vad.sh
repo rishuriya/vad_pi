@@ -10,8 +10,8 @@ GIT_REPO_URL="https://github.com/rishuriya/vad_pi.git"
 TARGET_CLONE_DIR="/home/rishav_a2z/vad_project"
 
 # Paths *relative to the project repository root* after cloning
-PYTHON_SCRIPT_REL_PATH="rasperrypi/realtime_vad_inference.py" 
-REQUIREMENTS_FILE_REL_PATH="rasperrypi/requirements_inference.txt" 
+PYTHON_SCRIPT_REL_PATH="realtime_vad_inference.py" 
+REQUIREMENTS_FILE_REL_PATH="requirements_inference.txt" 
 
 # Other paths
 VENV_PATH="/home/rishav_a2z/venv_vad"                # Path for the Python virtual environment
