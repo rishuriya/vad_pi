@@ -39,8 +39,8 @@ echo "Updating package list..."
 apt-get update -y
 
 # --- Install Prerequisites ---
-echo "Installing prerequisites (git, python3, venv, network-manager, wget)..."
-apt-get install -y git python3 python3-venv network-manager wget || { echo "🚨 Failed to install prerequisites."; exit 1; }
+echo "Installing prerequisites (git, python3, venv, network-manager, wget, portaudio)..."
+apt-get install -y git python3 python3-venv network-manager wget portaudio19-dev || { echo "🚨 Failed to install prerequisites."; exit 1; }
 
 # --- Wi-Fi Connection Logic (from previous script) ---
 echo "Checking Wi-Fi connection..."

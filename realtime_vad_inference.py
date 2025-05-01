@@ -298,4 +298,4 @@ if __name__ == "__main__":
              audio_queue.join()
              processor_thread.join(timeout=5)
 
-    print("Script finished.") 
+    print("Script finished.")
