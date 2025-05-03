@@ -266,26 +266,34 @@ chmod 755 "$TARGET_CLONE_DIR/$PYTHON_SCRIPT_REL_PATH"
 echo "✅ Python script permissions set."
 
 echo "Creating systemd service file: ${SERVICE_DIR}/${VAD_SERVICE_NAME}.service"
-cat << EOF > "${SERVICE_DIR}/${VAD_SERVICE_NAME}.service"
+cat > "${SERVICE_DIR}/${VAD_SERVICE_NAME}.service" << 'EOFSERVICE'
 [Unit]
-Description=Realtime VAD Inference Service ($VAD_SERVICE_NAME)
+Description=Realtime VAD Inference Service (vad-inference)
 # Wait for network connection attempt and sound system
-Wants=network-online.target ${WIFI_SERVICE_NAME}.service
-After=network-online.target sound.target ${WIFI_SERVICE_NAME}.service
+Wants=network-online.target wifi-connect.service
+After=network-online.target sound.target wifi-connect.service
 
 [Service]
-User=$TARGET_USER
-WorkingDirectory=$TARGET_CLONE_DIR
+User=TARGET_USER_PLACEHOLDER
+WorkingDirectory=TARGET_CLONE_DIR_PLACEHOLDER
 # Pass the Hugging Face token as an environment variable to the service
-Environment="HUGGING_FACE_TOKEN=$HF_TOKEN_INPUT"
-ExecStart=$PYTHON_EXEC_PATH $PYTHON_SCRIPT_ABS_PATH
+Environment="HUGGING_FACE_TOKEN=HF_TOKEN_PLACEHOLDER"
+ExecStart=PYTHON_EXEC_PATH_PLACEHOLDER PYTHON_SCRIPT_ABS_PATH_PLACEHOLDER
 Restart=on-failure
 StandardOutput=journal
 StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
-EOF
+EOFSERVICE
+
+# Replace placeholders with actual values using sed
+sed -i "s|User=TARGET_USER_PLACEHOLDER|User=$TARGET_USER|g" "${SERVICE_DIR}/${VAD_SERVICE_NAME}.service"
+sed -i "s|WorkingDirectory=TARGET_CLONE_DIR_PLACEHOLDER|WorkingDirectory=$TARGET_CLONE_DIR|g" "${SERVICE_DIR}/${VAD_SERVICE_NAME}.service"
+sed -i "s|Environment=\"HUGGING_FACE_TOKEN=HF_TOKEN_PLACEHOLDER\"|Environment=\"HUGGING_FACE_TOKEN=$HF_TOKEN_INPUT\"|g" "${SERVICE_DIR}/${VAD_SERVICE_NAME}.service"
+sed -i "s|PYTHON_EXEC_PATH_PLACEHOLDER|$PYTHON_EXEC_PATH|g" "${SERVICE_DIR}/${VAD_SERVICE_NAME}.service"
+sed -i "s|PYTHON_SCRIPT_ABS_PATH_PLACEHOLDER|$PYTHON_SCRIPT_ABS_PATH|g" "${SERVICE_DIR}/${VAD_SERVICE_NAME}.service"
+
 echo "✅ vad-inference service file created."
 
 # --- Enable Services ---
