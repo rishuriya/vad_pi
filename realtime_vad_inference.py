@@ -371,25 +371,47 @@ def get_location_from_ip():
 
 # Calculate dB level from audio segment
 def calculate_db_level(audio_segment):
-    """Calculate the dB level of an audio segment, ensure it's positive."""
+    """Calculate the dB level of an audio segment as a realistic positive dB value."""
     # Use RMS energy to calculate dB
     if len(audio_segment) == 0:
         return 0.0
     
+    # Scale audio to ensure we get meaningful values
+    # Audio values are typically in [-1.0, 1.0] range
     # Calculate RMS energy
     rms = np.sqrt(np.mean(np.square(audio_segment)))
     
+    # Debug info
+    print(f"  DEBUG: Raw RMS value: {rms}")
+    
     # Convert to dB (avoid log of zero)
     if rms > 0:
-        db = 20 * np.log10(rms)
-        # Convert to positive scale (typical environmental noise is 30-90 dB)
-        # We'll use a reference where 0 dB RMS becomes 30 dB environmental
-        positive_db = max(30 + db, 0)  # Ensure it's not negative
+        # Calculate dB referenced to full scale (dBFS)
+        db_fs = 20 * np.log10(rms)
+        
+        # Debug info
+        print(f"  DEBUG: Raw dB (dBFS): {db_fs}")
+        
+        # Convert from dBFS to approximate dB SPL (Sound Pressure Level)
+        # Assuming typical conversions for speech/ambient sound:
+        # - Quiet room: 30-40 dB
+        # - Normal conversation: 60-70 dB
+        # - Loud noise: 80-90 dB
+        
+        # For typical audio recordings, -30 dBFS to -20 dBFS might be normal speech
+        # So we'll map -30 dBFS to approximately 65 dB SPL
+        db_spl = 65 + (db_fs + 30)  # Adjust these values based on your recording setup
+        
+        # Ensure we're in a realistic range
+        realistic_db = max(min(db_spl, 100), 30)  # Clamp between 30-100 dB
+        
+        # Debug info
+        print(f"  DEBUG: Converted to dB SPL: {db_spl}, Realistic: {realistic_db}")
     else:
-        positive_db = 0.0
+        realistic_db = 30.0  # Default to quiet room if RMS is zero
     
-    # Convert numpy type to Python native float
-    return float(round(positive_db, 2))
+    # Convert numpy type to Python native float and round
+    return float(round(realistic_db, 1))
 
 # Send data to API endpoint
 def send_to_api(noise_level, audio_type="ambient"):
