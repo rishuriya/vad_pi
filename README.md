@@ -38,6 +38,7 @@ This will:
 3. Install dependencies and set up services
 4. Configure WiFi and permissions
 5. Guide you through the entire installation process
+6. Fix common issues like systemd GROUP errors
 
 ### Option 2: Manual Setup with Helper Script
 
@@ -117,6 +118,13 @@ sudo journalctl -u vad-inference.service -f
 ```
 
 ## Troubleshooting
+
+- **GROUP Error in Systemd Service**: If you see `status=216/GROUP` errors in your service logs, this is a common issue related to group configuration. The one-click installer addresses this automatically, but you can also fix it manually:
+  ```bash
+  sudo sed -i '/^Group=/d' /etc/systemd/system/vad-inference.service
+  sudo systemctl daemon-reload
+  sudo systemctl restart vad-inference.service
+  ```
 
 - **WiFi Connection Issues**: Check the status of the WiFi connection service with:
   ```bash

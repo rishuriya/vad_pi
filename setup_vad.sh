@@ -259,6 +259,12 @@ TARGET_GROUP=$(id -gn "$TARGET_USER") || { echo "🚨 Failed to get group name f
 echo "Detected primary group for $TARGET_USER: $TARGET_GROUP"
 # --- <<< END Group Fix >>> ---
 
+# Ensure the Python script is executable
+echo "Ensuring realtime_vad_inference.py is executable..."
+chmod +x "$TARGET_CLONE_DIR/$PYTHON_SCRIPT_REL_PATH"
+chmod 755 "$TARGET_CLONE_DIR/$PYTHON_SCRIPT_REL_PATH"
+echo "✅ Python script permissions set."
+
 echo "Creating systemd service file: ${SERVICE_DIR}/${VAD_SERVICE_NAME}.service"
 cat << EOF > "${SERVICE_DIR}/${VAD_SERVICE_NAME}.service"
 [Unit]
@@ -269,7 +275,6 @@ After=network-online.target sound.target ${WIFI_SERVICE_NAME}.service
 
 [Service]
 User=$TARGET_USER
-Group=$TARGET_USER
 WorkingDirectory=$TARGET_CLONE_DIR
 # Pass the Hugging Face token as an environment variable to the service
 Environment="HUGGING_FACE_TOKEN=$HF_TOKEN_INPUT"

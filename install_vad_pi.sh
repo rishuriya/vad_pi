@@ -81,6 +81,48 @@ else
   echo -e "${YELLOW}Could not find insertion point for permission fix. This may cause issues.${NC}"
 fi
 
+# Fix the systemd service file to avoid GROUP issues
+echo -e "\n${GREEN}Fixing systemd service configuration to address GROUP issues...${NC}"
+
+# Find section in setup_vad.sh that creates the service file
+SERVICE_START=$(grep -n "cat << EOF > \"\${SERVICE_DIR}/\${VAD_SERVICE_NAME}.service\"" setup_vad.sh | cut -d: -f1)
+SERVICE_END=$(grep -n -A20 "cat << EOF > \"\${SERVICE_DIR}/\${VAD_SERVICE_NAME}.service\"" setup_vad.sh | grep -n "EOF" | head -1 | cut -d: -f1)
+SERVICE_END=$((SERVICE_START + SERVICE_END - 1))
+
+if [ -n "$SERVICE_START" ] && [ -n "$SERVICE_END" ]; then
+  # Create a backup
+  cp setup_vad.sh setup_vad.sh.bak
+  
+  # Extract the service file definition
+  sed -n "${SERVICE_START},${SERVICE_END}p" setup_vad.sh > service_definition.txt
+  
+  # Create fixed service definition (removing Group=$TARGET_USER line)
+  grep -v "Group=\$TARGET_USER" service_definition.txt > service_definition_fixed.txt
+  
+  # Replace the service definition in the setup_vad.sh
+  sed -i "${SERVICE_START},${SERVICE_END}d" setup_vad.sh
+  sed -i "${SERVICE_START}r service_definition_fixed.txt" setup_vad.sh
+  
+  echo -e "${GREEN}Successfully fixed systemd service definition to avoid GROUP errors.${NC}"
+else
+  echo -e "${YELLOW}Could not find systemd service definition in setup script. Will attempt a workaround.${NC}"
+  
+  # Create a post-setup hook to fix the service file
+  cat << 'EOF' > fix_service.sh
+#!/bin/bash
+# This script removes the problematic Group line from the vad-inference service file
+SERVICE_FILE="/etc/systemd/system/vad-inference.service"
+if [ -f "$SERVICE_FILE" ]; then
+  echo "Fixing GROUP issue in $SERVICE_FILE..."
+  cp "$SERVICE_FILE" "$SERVICE_FILE.bak"
+  grep -v "^Group=" "$SERVICE_FILE.bak" > "$SERVICE_FILE"
+  systemctl daemon-reload
+  echo "✅ Service file fixed."
+fi
+EOF
+  chmod +x fix_service.sh
+fi
+
 # Run the setup script
 echo -e "\n${GREEN}Running VAD Pi setup...${NC}\n"
 ./setup_vad.sh
@@ -88,6 +130,12 @@ echo -e "\n${GREEN}Running VAD Pi setup...${NC}\n"
 # Check the setup exit status
 SETUP_EXIT_CODE=$?
 if [ $SETUP_EXIT_CODE -eq 0 ]; then
+  # If we created a post-setup hook, run it now
+  if [ -f "fix_service.sh" ]; then
+    echo -e "\n${GREEN}Applying post-setup fixes for GROUP issue...${NC}"
+    ./fix_service.sh
+  fi
+  
   # Cleanup the temporary directory
   cd /
   rm -rf "${TEMP_DIR}"
@@ -108,6 +156,12 @@ else
   echo -e "\n${RED}Setup encountered errors. Please check the output above for details.${NC}"
   echo "Temporary files were left at ${TEMP_DIR} for debugging purposes."
   echo "You may need to fix the issues and run the setup again."
+  
+  # Add a manual fix suggestion
+  echo -e "\n${YELLOW}If the issue is related to GROUP errors, you can try this manual fix:${NC}"
+  echo "sudo sed -i '/^Group=/d' /etc/systemd/system/vad-inference.service"
+  echo "sudo systemctl daemon-reload"
+  echo "sudo systemctl restart vad-inference.service"
 fi
 
 exit $SETUP_EXIT_CODE 
