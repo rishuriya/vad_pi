@@ -388,7 +388,8 @@ def calculate_db_level(audio_segment):
     else:
         positive_db = 0.0
     
-    return round(positive_db, 2)
+    # Convert numpy type to Python native float
+    return float(round(positive_db, 2))
 
 # Send data to API endpoint
 def send_to_api(noise_level, audio_type="ambient"):
@@ -400,11 +401,11 @@ def send_to_api(noise_level, audio_type="ambient"):
         # Get location from IP
         latitude, longitude = get_location_from_ip()
         
-        # Prepare payload
+        # Prepare payload - ensure all types match API expectations
         payload = {
-            "latitude": latitude,
-            "longitude": longitude,
-            "noise_level": noise_level,
+            "latitude": str(latitude),  # Convert float to string
+            "longitude": str(longitude),  # Convert float to string
+            "noise_level": int(round(noise_level)),  # Convert float to integer
             "timestamp": timestamp,
             "location": "raspberry pi",
             "audio_type": audio_type
@@ -435,17 +436,16 @@ def queue_noise_data(noise_level, audio_type="ambient"):
         timestamp = datetime.now().isoformat()
         
         # Get location from IP (we'll cache this to avoid repeated lookups)
-        global cached_latitude, cached_longitude
         if not hasattr(queue_noise_data, 'cached_location'):
             queue_noise_data.cached_location = get_location_from_ip()
         
         latitude, longitude = queue_noise_data.cached_location
         
-        # Prepare data for queue
+        # Prepare data for queue - ensure all types match API expectations
         noise_data = {
-            "latitude": latitude,
-            "longitude": longitude,
-            "noise_level": noise_level,
+            "latitude": str(latitude),  # Convert float to string
+            "longitude": str(longitude),  # Convert float to string
+            "noise_level": int(round(noise_level)),  # Convert float to integer
             "timestamp": timestamp,
             "location": "raspberry pi",
             "audio_type": audio_type
@@ -454,13 +454,13 @@ def queue_noise_data(noise_level, audio_type="ambient"):
         # Add to queue, remove oldest if full
         try:
             api_request_queue.put_nowait(noise_data)
-            print(f"Queued noise data: {noise_level} dB (queue size: {api_request_queue.qsize()})")
+            print(f"Queued noise data: {int(round(noise_level))} dB (queue size: {api_request_queue.qsize()})")
         except queue.Full:
             # Remove the oldest item and add the new one
             try:
                 api_request_queue.get_nowait()
                 api_request_queue.put_nowait(noise_data)
-                print(f"Warning: Queue full, dropped oldest item to add new: {noise_level} dB")
+                print(f"Warning: Queue full, dropped oldest item to add new: {int(round(noise_level))} dB")
             except Exception as qe:
                 print(f"Error managing queue: {qe}")
     
