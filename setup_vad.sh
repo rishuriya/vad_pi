@@ -7,14 +7,14 @@ KNOWN_WIFI_PSK="wefp8772"
 
 # This is the URL of the *actual project repository* to be cloned
 GIT_REPO_URL="https://github.com/rishuriya/vad_pi.git"
-TARGET_CLONE_DIR="/home/rishav_a2z/vad_project"
+# TARGET_CLONE_DIR will be defined after user detection
 
 # Paths *relative to the project repository root* after cloning
 PYTHON_SCRIPT_REL_PATH="realtime_vad_inference.py" 
 REQUIREMENTS_FILE_REL_PATH="requirements_inference.txt" 
 
-# Other paths
-VENV_PATH="/home/rishav_a2z/venv_vad"                # Path for the Python virtual environment
+# Other paths (will be defined after user detection)
+# VENV_PATH
 WIFI_HELPER_SCRIPT_PATH="/usr/local/bin/wifi_connect_helper.sh"
 SERVICE_DIR="/etc/systemd/system"
 WIFI_SERVICE_NAME="wifi-connect"
@@ -24,15 +24,26 @@ VAD_SERVICE_NAME="vad-inference"
 echo "Starting Full VAD Inference Setup Script..."
 set -e # Exit immediately if a command exits with a non-zero status.
 
-# --- Check Root ---
+# --- Check Root --- 
 if [ "$EUID" -ne 0 ]; then
   echo "🛑 This script needs to be run with sudo privileges."
-  # Re-run with sudo if not already root
-  # Ensure the script path is correctly passed when re-executing
   exec sudo bash "$0" "$@" 
 fi
-
 echo "Running as root..."
+
+# --- Determine Target User --- 
+if [ -z "$SUDO_USER" ] || [ "$SUDO_USER" == "root" ]; then
+  echo "🚨 Could not determine the original user who ran sudo. Please run like: sudo bash $0" 
+  exit 1
+fi
+TARGET_USER="$SUDO_USER"
+echo "Detected target user: $TARGET_USER"
+
+# --- Define User-Specific Paths ---
+TARGET_CLONE_DIR="/home/$TARGET_USER/vad_project"
+VENV_PATH="/home/$TARGET_USER/venv_vad"
+echo "Project directory set to: $TARGET_CLONE_DIR"
+echo "Virtual env path set to: $VENV_PATH"
 
 # --- Update Package List ---
 echo "Updating package list..."
@@ -77,7 +88,17 @@ if [ -d "$TARGET_CLONE_DIR" ]; then
     rm -rf "$TARGET_CLONE_DIR"
 fi
 # Clone as the target user
-sudo -u rishav_a2z git clone "$GIT_REPO_URL" "$TARGET_CLONE_DIR" || { echo "🚨 Failed to clone repository."; exit 1; }
+sudo -u "$TARGET_USER" git clone "$GIT_REPO_URL" "$TARGET_CLONE_DIR" || { echo "🚨 Failed to clone repository."; exit 1; }
+
+# --- <<< START Permission Fixes >>> ---
+echo "Ensuring correct permissions for $TARGET_USER on $TARGET_CLONE_DIR..."
+# Ensure the target user can enter their home directory (should be default, but just in case)
+chmod u+x "/home/$TARGET_USER"
+# Ensure the target user can read files and enter directories within the cloned repo
+chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_CLONE_DIR"
+chmod -R u+rX "$TARGET_CLONE_DIR"
+echo "✅ Permissions set."
+# --- <<< END Permission Fixes >>> ---
 
 # Check if cloning was successful and target directory exists
 if [ ! -d "$TARGET_CLONE_DIR" ]; then
@@ -85,21 +106,25 @@ if [ ! -d "$TARGET_CLONE_DIR" ]; then
     exit 1
 fi
 
-# --- Set up Python Virtual Environment ---
+# --- Set up Python Virtual Environment --- 
 echo "Setting up Python virtual environment at $VENV_PATH..."
 if [ -d "$VENV_PATH" ]; then
-    echo "Removing existing virtual environment: $VENV_PATH"
-    rm -rf "$VENV_PATH"
+    echo "✅ Virtual environment already exists at $VENV_PATH. Reusing it."
+    # Optional: Add an upgrade pip command here if desired
+    # sudo -u "$TARGET_USER" "$VENV_PATH/bin/pip" install --upgrade pip
+else
+    echo "Creating new virtual environment..."
+    # Create venv as the target user
+    sudo -u "$TARGET_USER" python3 -m venv "$VENV_PATH" || { echo "🚨 Failed to create virtual environment."; exit 1; }
+    echo "✅ New virtual environment created."
 fi
-# Create venv as the target user
-sudo -u rishav_a2z python3 -m venv "$VENV_PATH" || { echo "🚨 Failed to create virtual environment."; exit 1; }
 
 REQUIREMENTS_ABS_PATH="$TARGET_CLONE_DIR/$REQUIREMENTS_FILE_REL_PATH"
 if [ ! -f "$REQUIREMENTS_ABS_PATH" ]; then echo "🚨 Requirements file not found: $REQUIREMENTS_ABS_PATH"; exit 1; fi
 
-echo "Installing Python requirements from $REQUIREMENTS_ABS_PATH..."
-# Install requirements as the target user
-sudo -u rishav_a2z "$VENV_PATH/bin/pip" install -r "$REQUIREMENTS_ABS_PATH" || { echo "🚨 Failed to install requirements."; exit 1; }
+echo "Installing/Updating Python requirements from $REQUIREMENTS_ABS_PATH..."
+# Install requirements as the target user (will install or update packages)
+sudo -u "$TARGET_USER" "$VENV_PATH/bin/pip" install -r "$REQUIREMENTS_ABS_PATH" || { echo "🚨 Failed to install requirements."; exit 1; }
 
 # --- << START Hugging Face Token Handling >> ---
 echo "" # Add some spacing
@@ -120,7 +145,7 @@ done
 # --- Configure Environment Variable Persistence ---
 # Detect the shell and determine the profile file for the target user
 # Note: We are configuring for the target user as the service runs as them
-TARGET_USER="rishav_a2z"
+# TARGET_USER is already set above
 USER_SHELL=$(getent passwd $TARGET_USER | cut -d: -f7 || echo "/bin/bash") # Default to bash if lookup fails
 PROFILE_FILE=""
 
@@ -219,7 +244,7 @@ echo "✅ wifi-connect service file created."
 # Define absolute paths based on the cloned repo location
 PYTHON_EXEC_PATH="$VENV_PATH/bin/python"
 PYTHON_SCRIPT_ABS_PATH="$TARGET_CLONE_DIR/$PYTHON_SCRIPT_REL_PATH"
-WORKING_DIR=$(dirname "$PYTHON_SCRIPT_ABS_PATH") # e.g., /home/rishav_a2z/vad_project/rasperrypi
+WORKING_DIR=$(dirname "$PYTHON_SCRIPT_ABS_PATH") # e.g., /home/detected_user/vad_project
 
 # Verify paths needed for the service
 if [ ! -f "$PYTHON_EXEC_PATH" ]; then echo "🚨 Python executable not found: $PYTHON_EXEC_PATH"; exit 1; fi
@@ -235,8 +260,8 @@ Wants=network-online.target ${WIFI_SERVICE_NAME}.service
 After=network-online.target sound.target ${WIFI_SERVICE_NAME}.service
 
 [Service]
-User=rishav_a2z
-Group=rishav_a2z
+User=$TARGET_USER
+Group=$TARGET_USER # Assuming group name matches username
 WorkingDirectory=$WORKING_DIR
 # Pass the Hugging Face token as an environment variable to the service
 Environment="HUGGING_FACE_TOKEN=$HF_TOKEN_INPUT"
