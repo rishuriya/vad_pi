@@ -244,12 +244,20 @@ echo "✅ wifi-connect service file created."
 # Define absolute paths based on the cloned repo location
 PYTHON_EXEC_PATH="$VENV_PATH/bin/python"
 PYTHON_SCRIPT_ABS_PATH="$TARGET_CLONE_DIR/$PYTHON_SCRIPT_REL_PATH"
-WORKING_DIR=$(dirname "$PYTHON_SCRIPT_ABS_PATH") # e.g., /home/detected_user/vad_project
+# WORKING_DIR=$(dirname "$PYTHON_SCRIPT_ABS_PATH") # No longer needed, using TARGET_CLONE_DIR directly
 
 # Verify paths needed for the service
 if [ ! -f "$PYTHON_EXEC_PATH" ]; then echo "🚨 Python executable not found: $PYTHON_EXEC_PATH"; exit 1; fi
 if [ ! -f "$PYTHON_SCRIPT_ABS_PATH" ]; then echo "🚨 Python script not found: $PYTHON_SCRIPT_ABS_PATH"; exit 1; fi
-if [ ! -d "$WORKING_DIR" ]; then echo "🚨 Working directory not found: $WORKING_DIR"; exit 1; fi
+# if [ ! -d "$WORKING_DIR" ]; then echo "🚨 Working directory not found: $WORKING_DIR"; exit 1; fi # No longer needed
+# Verify the clone directory exists instead
+if [ ! -d "$TARGET_CLONE_DIR" ]; then echo "🚨 Target clone directory not found: $TARGET_CLONE_DIR"; exit 1; fi
+
+# --- <<< START Group Fix >>> ---
+# Get the primary group name for the target user
+TARGET_GROUP=$(id -gn "$TARGET_USER") || { echo "🚨 Failed to get group name for user $TARGET_USER"; exit 1; }
+echo "Detected primary group for $TARGET_USER: $TARGET_GROUP"
+# --- <<< END Group Fix >>> ---
 
 echo "Creating systemd service file: ${SERVICE_DIR}/${VAD_SERVICE_NAME}.service"
 cat << EOF > "${SERVICE_DIR}/${VAD_SERVICE_NAME}.service"
@@ -261,8 +269,8 @@ After=network-online.target sound.target ${WIFI_SERVICE_NAME}.service
 
 [Service]
 User=$TARGET_USER
-Group=$TARGET_USER # Assuming group name matches username
-WorkingDirectory=$WORKING_DIR
+Group=$TARGET_USER
+WorkingDirectory=$TARGET_CLONE_DIR
 # Pass the Hugging Face token as an environment variable to the service
 Environment="HUGGING_FACE_TOKEN=$HF_TOKEN_INPUT"
 ExecStart=$PYTHON_EXEC_PATH $PYTHON_SCRIPT_ABS_PATH
