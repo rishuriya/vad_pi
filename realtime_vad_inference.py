@@ -35,12 +35,12 @@ HOME_DIR = pathlib.Path.home()
 # --- Paths --- 
 # Construct paths relative to the user's home directory
 # IMPORTANT: Adjust the relative paths ('vad_project/...') if your files are in a different subdirectory
-SVM_MODEL_PATH = HOME_DIR.joinpath("vad_svm_from_csv_filename_labeled.joblib")
-SCALER_PATH = HOME_DIR.joinpath("scaler_svm_from_csv_filename_labeled.joblib")
+SVM_MODEL_PATH = HOME_DIR.joinpath("vad_project/vad_svm_from_csv_filename_labeled.joblib")
+SCALER_PATH = HOME_DIR.joinpath("vad_project/scaler_svm_from_csv_filename_labeled.joblib")
 
 # CSV log file for mismatches
 # Create rasperrypi directory in home if it doesn't exist
-LOG_DIR = HOME_DIR.joinpath("rasperrypi")
+LOG_DIR = HOME_DIR.joinpath("vad_project/logs")
 LOG_DIR.mkdir(parents=True, exist_ok=True) # Ensure the directory exists
 MISMATCH_LOG_FILE = LOG_DIR.joinpath("mismatch_log.csv")
 
