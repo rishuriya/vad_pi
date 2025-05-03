@@ -11,11 +11,11 @@ import os
 import requests
 import json
 from datetime import datetime
-import logging
+import pathlib # Added for home directory
 from pyannote.audio import Model, Audio
 from pyannote.core import Segment, Timeline
 from pyannote.audio.pipelines import VoiceActivityDetection
-import pathlib # Added for home directory
+
 # --- Configuration ---
 CHUNK_DURATION = 15  # seconds
 # Default sample rate (will be updated with actual device rate)
@@ -147,6 +147,10 @@ def process_audio():
     device_info = sd.query_devices(kind='input')
     default_sr = int(device_info['default_samplerate'])
     global processing_active
+    
+    # Access the logger
+    global logger
+    
     print("Processing thread started.")
     while processing_active or not audio_queue.empty():
         try:
@@ -217,7 +221,7 @@ def process_audio():
 
                 # --- Process Noise Segments for API ---
                 if len(noise_timeline) > 0:
-                    logger.info(f"Processing {len(noise_timeline)} noise segments for API submission")
+                    print(f"Processing {len(noise_timeline)} noise segments for API submission")
                     
                     # Calculate average noise level across all noise segments
                     noise_levels = []
@@ -236,14 +240,14 @@ def process_audio():
                                 # Calculate dB level
                                 db_level = calculate_db_level(segment_audio_np.flatten())
                                 noise_levels.append(db_level)
-                                logger.debug(f"Noise segment [{seg_start:.2f}-{seg_end:.2f}s]: {db_level} dB")
+                                print(f"Noise segment [{seg_start:.2f}-{seg_end:.2f}s]: {db_level} dB")
                         except Exception as e:
-                            logger.error(f"Error processing noise segment for API: {e}")
+                            print(f"Error processing noise segment for API: {e}")
                     
                     # If we found any valid noise levels, send the average to the API
                     if noise_levels:
                         avg_noise_level = sum(noise_levels) / len(noise_levels)
-                        logger.info(f"Average noise level: {avg_noise_level:.2f} dB")
+                        print(f"Average noise level: {avg_noise_level:.2f} dB")
                         
                         # Try to send to API directly first
                         success = send_to_api(avg_noise_level)
@@ -356,11 +360,11 @@ def get_location_from_ip():
                 lat, lng = data['loc'].split(',')
                 return float(lat), float(lng)
             else:
-                logger.warning("No location data in IP response")
+                print("Warning: No location data in IP response")
         else:
-            logger.warning(f"Failed to get IP location: HTTP {response.status_code}")
+            print(f"Warning: Failed to get IP location: HTTP {response.status_code}")
     except Exception as e:
-        logger.error(f"Error getting location from IP: {e}")
+        print(f"Error getting location from IP: {e}")
     
     # Default fallback coordinates if lookup fails (0,0 - null island)
     return 0.0, 0.0
@@ -410,17 +414,17 @@ def send_to_api(noise_level, audio_type="ambient"):
         response = requests.post(API_ENDPOINT, json=payload, timeout=5)
         
         if response.status_code == 200:
-            logger.info(f"Successfully sent noise data to API: {noise_level} dB")
+            print(f"Successfully sent noise data to API: {noise_level} dB")
             return True
         else:
-            logger.warning(f"API request failed with status code {response.status_code}")
+            print(f"Warning: API request failed with status code {response.status_code}")
             return False
     
     except requests.RequestException as e:
-        logger.error(f"API request error: {e}")
+        print(f"Error: API request error: {e}")
         return False
     except Exception as e:
-        logger.error(f"Error sending to API: {e}")
+        print(f"Error: Error sending to API: {e}")
         return False
 
 # Function to add failed request to queue
@@ -450,23 +454,23 @@ def queue_noise_data(noise_level, audio_type="ambient"):
         # Add to queue, remove oldest if full
         try:
             api_request_queue.put_nowait(noise_data)
-            logger.info(f"Queued noise data: {noise_level} dB (queue size: {api_request_queue.qsize()})")
+            print(f"Queued noise data: {noise_level} dB (queue size: {api_request_queue.qsize()})")
         except queue.Full:
             # Remove the oldest item and add the new one
             try:
                 api_request_queue.get_nowait()
                 api_request_queue.put_nowait(noise_data)
-                logger.warning(f"Queue full, dropped oldest item to add new: {noise_level} dB")
+                print(f"Warning: Queue full, dropped oldest item to add new: {noise_level} dB")
             except Exception as qe:
-                logger.error(f"Error managing queue: {qe}")
+                print(f"Error managing queue: {qe}")
     
     except Exception as e:
-        logger.error(f"Error queueing noise data: {e}")
+        print(f"Error queueing noise data: {e}")
 
 # Thread to process the API request queue
 def process_api_queue():
     """Process the queue of failed API requests."""
-    logger.info("API queue processor thread started")
+    print("API queue processor thread started")
     
     while processing_active:
         try:
@@ -485,7 +489,7 @@ def process_api_queue():
                 process_api_queue.last_attempt_time = current_time
                 
                 if api_available and not api_request_queue.empty():
-                    logger.info(f"API appears available, processing queue (size: {api_request_queue.qsize()})")
+                    print(f"API appears available, processing queue (size: {api_request_queue.qsize()})")
                     
                     # Process up to 10 items at once to avoid flooding
                     success_count = 0
@@ -509,34 +513,34 @@ def process_api_queue():
                                 success_count += 1
                             else:
                                 # API is up but rejected the request, log and remove
-                                logger.warning(f"API rejected queued data: {response.status_code}")
+                                print(f"Warning: API rejected queued data: {response.status_code}")
                                 api_request_queue.get_nowait()
                                 failure_count += 1
                                 
                         except requests.RequestException:
                             # API seems down again, break batch processing
-                            logger.warning("API communication failed during queue processing")
+                            print("Warning: API communication failed during queue processing")
                             failure_count += 1
                             break
                         except Exception as e:
                             # Other processing error, remove item to avoid queue blocking
-                            logger.error(f"Error processing queued item: {e}")
+                            print(f"Error processing queued item: {e}")
                             try:
                                 api_request_queue.get_nowait()
                             except:
                                 pass
                             failure_count += 1
                     
-                    logger.info(f"Queue processing results: {success_count} sent, {failure_count} failed")
+                    print(f"Queue processing results: {success_count} sent, {failure_count} failed")
             
             # Sleep before next check
             time.sleep(1)
             
         except Exception as e:
-            logger.error(f"Error in API queue processor: {e}")
+            print(f"Error in API queue processor: {e}")
             time.sleep(5)  # Longer sleep on error
     
-    logger.info("API queue processor thread stopping")
+    print("API queue processor thread stopping")
 
 # Initialize last attempt time
 process_api_queue.last_attempt_time = 0
@@ -567,7 +571,7 @@ if __name__ == "__main__":
         # Start the API queue processor thread
         api_queue_thread = threading.Thread(target=process_api_queue, daemon=True)
         api_queue_thread.start()
-        logger.info("API queue processor thread started")
+        print("API queue processor thread started")
 
         # Calculate buffer size for the desired chunk duration
         blocksize = int(default_sr * CHUNK_DURATION)
